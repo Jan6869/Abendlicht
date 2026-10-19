@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Sonne -->
+    <path android:fillColor="#FFFFF3D6" android:pathData="M54,56m-21,0a21,21 0,1 1,42 0a21,21 0,1 1,-42 0" />
+    <path android:fillColor="#FFF59A4E" android:pathData="M54,56m-15,0a15,15 0,1 1,30 0a15,15 0,1 1,-30 0" />
+    <!-- Huegel -->
+    <path android:fillColor="#FF9CC27A" android:pathData="M18,70 C30,58 44,60 56,66 C66,61 80,58 92,68 L92,92 L18,92 Z" />
+    <path android:fillColor="#FF6E9E58" android:pathData="M18,78 C34,70 50,72 62,78 C72,74 84,72 92,76 L92,92 L18,92 Z" />
+    <!-- Stern -->
+    <path android:fillColor="#FFFFFFFF" android:pathData="M76,32 L77.6,36.4 L82,38 L77.6,39.6 L76,44 L74.4,39.6 L70,38 L74.4,36.4 Z" />
+</vector>
