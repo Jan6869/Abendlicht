@@ -19,7 +19,14 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     private val store = Store(app)
 
     var habits by mutableStateOf(store.loadHabits()); private set
-    var log by mutableStateOf(store.loadLog()); private set
+    // Alte Einträge ohne gespeicherte Dauer bekommen die Dauer ihrer Gewohnheit.
+    var log by mutableStateOf(
+        store.loadLog().mapValues { (_, list) ->
+            list.map { e ->
+                if (e.minutes >= 0) e else e.copy(minutes = habits.firstOrNull { it.id == e.habitId }?.minutes ?: 0)
+            }
+        }
+    ); private set
     var excluded by mutableStateOf(store.loadExcluded()); private set
     var settings by mutableStateOf(store.loadSettings()); private set
     var timer by mutableStateOf(store.loadTimer()); private set
@@ -116,11 +123,25 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     // ── Erledigt ──────────────────────────────────────────────
 
-    fun markDone(id: String) {
+    /** Insgesamt genommene Zeit in Minuten. */
+    val totalMinutes get() = log.values.sumOf { list -> list.sumOf { it.minutes.coerceAtLeast(0) } }
+    fun minutesIn(month: java.time.YearMonth) = log.entries
+        .filter { java.time.YearMonth.from(it.key) == month }
+        .sumOf { (_, list) -> list.sumOf { it.minutes.coerceAtLeast(0) } }
+
+    /**
+     * Trägt die Gewohnheit für heute ein. `minutes` kommt vom Timer (tatsächlich genommene Zeit);
+     * ohne Angabe zählt die eingestellte Dauer. Läuft ein Timer für etwas schon Erledigtes, wird die Zeit addiert.
+     */
+    fun markDone(id: String, minutes: Int? = null) {
         val habit = habits.firstOrNull { it.id == id } ?: return
         val entries = log[today].orEmpty()
-        if (entries.none { it.habitId == id }) {
-            log = log + (today to (entries + LogEntry(id, habit.scene)))
+        val existing = entries.firstOrNull { it.habitId == id }
+        if (existing == null) {
+            log = log + (today to (entries + LogEntry(id, habit.scene, minutes ?: habit.minutes)))
+            store.saveLog(log)
+        } else if (minutes != null) {
+            log = log + (today to entries.map { if (it.habitId == id) it.copy(minutes = it.minutes + minutes) else it })
             store.saveLog(log)
         }
         selectedId = null
@@ -147,16 +168,18 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (entries.any { it.habitId == habit.id }) {
             unmark(date, habit.id)
         } else {
-            log = log + (date to (entries + LogEntry(habit.id, habit.scene)))
+            log = log + (date to (entries + LogEntry(habit.id, habit.scene, habit.minutes)))
             store.saveLog(log)
         }
     }
 
     // ── Timer ─────────────────────────────────────────────────
 
-    fun startTimer(id: String) {
+    fun startTimer(id: String, minutes: Int? = null) {
         val habit = habits.firstOrNull { it.id == id } ?: return
-        val total = habit.minutes * 60_000L
+        val m = (minutes ?: habit.minutes).coerceIn(MIN_MINUTES, MAX_MINUTES)
+        if (m != habit.minutes) saveHabit(habit.copy(minutes = m))
+        val total = m * 60_000L
         val t = TimerState(id, total, System.currentTimeMillis() + total, total)
         updateTimer(t)
         Alarms.scheduleTimer(getApplication(), t.endAt!!)
@@ -185,7 +208,8 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val t = timer ?: return
         updateTimer(null)
         Alarms.cancelTimer(getApplication())
-        markDone(t.habitId)
+        val elapsed = t.totalMs - t.remaining(System.currentTimeMillis())
+        markDone(t.habitId, ((elapsed + 30_000L) / 60_000L).toInt().coerceAtLeast(1))
     }
 
     fun reconcileTimer() {
@@ -204,6 +228,13 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     fun saveHabit(h: Habit) {
         habits = if (habits.any { it.id == h.id }) habits.map { if (it.id == h.id) h else it } else habits + h
         store.saveHabits(habits)
+    }
+
+    /** Neue Standarddauer, z. B. nach dem Wischen über den Timer-Knopf. */
+    fun setMinutes(id: String, minutes: Int) {
+        val h = habits.firstOrNull { it.id == id } ?: return
+        val m = minutes.coerceIn(MIN_MINUTES, MAX_MINUTES)
+        if (m != h.minutes) saveHabit(h.copy(minutes = m))
     }
 
     fun deleteHabit(id: String) {

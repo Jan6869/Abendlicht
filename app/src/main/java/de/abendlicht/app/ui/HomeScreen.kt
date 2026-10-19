@@ -43,6 +43,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Casino
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.SelfImprovement
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -144,6 +145,12 @@ fun HomeScreen(vm: AppViewModel, requestNotificationPermission: () -> Unit) {
                         included = !excluded,
                         time = time,
                         onClick = { vm.tapCard(h.id) },
+                        actions = if (vm.mode == Mode.Browse && vm.timer == null && vm.selectedId == h.id) CardActions(
+                            onStartTimer = { m -> requestNotificationPermission(); vm.startTimer(h.id, m) },
+                            onDone = { vm.markDone(h.id) },
+                            onUnmark = { vm.unmark(vm.today, h.id) },
+                            onMinutesChange = { m -> vm.setMinutes(h.id, m) },
+                        ) else null,
                     )
                 }
             }
@@ -155,6 +162,8 @@ fun HomeScreen(vm: AppViewModel, requestNotificationPermission: () -> Unit) {
                 habits = vm.habits,
                 onToggle = { d, h -> vm.toggleOnDate(d, h) },
             )
+            Spacer(Modifier.height(14.dp))
+            TimeForYou(total = vm.totalMinutes, thisMonth = vm.minutesIn(java.time.YearMonth.from(vm.today)))
             // Platz, damit das Panel unten nie etwas verdeckt
             Spacer(Modifier.height(if (vm.timer != null) 330.dp else 180.dp))
             Spacer(Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
@@ -171,13 +180,11 @@ fun HomeScreen(vm: AppViewModel, requestNotificationPermission: () -> Unit) {
 
         val panel: Panel = run {
             val t = vm.timer
-            val sel = vm.selectedId?.let { id -> vm.habits.firstOrNull { it.id == id } }
             val undo = vm.lastDone?.second?.let { id -> vm.habits.firstOrNull { it.id == id } }
             when {
                 t != null -> vm.habits.firstOrNull { it.id == t.habitId }?.let { Panel.Running(it, t) } ?: Panel.None
                 vm.mode == Mode.Rolling -> Panel.Rolling
                 vm.mode == Mode.RandomPick -> Panel.Random(habits.count { it.id !in vm.excluded })
-                sel != null -> Panel.Selected(sel, vm.doneToday(sel.id))
                 undo != null -> Panel.Undo(undo)
                 else -> Panel.None
             }
@@ -347,3 +354,43 @@ private fun RandomButton(active: Boolean, rolling: Boolean, onClick: () -> Unit)
 }
 
 private fun lerpColor(a: Color, b: Color, f: Float) = androidx.compose.ui.graphics.lerp(a, b, f.coerceIn(0f, 1f))
+
+/** Wie viel Zeit du dir insgesamt schon für dich genommen hast – zählt beim Ändern sanft hoch. */
+@Composable
+private fun TimeForYou(total: Int, thisMonth: Int) {
+    val p = LocalPalette.current
+    val shown by androidx.compose.animation.core.animateIntAsState(
+        total, androidx.compose.animation.core.tween(900, easing = androidx.compose.animation.core.FastOutSlowInEasing), label = "total"
+    )
+    val warm = Color(0xFFF29A4A)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(30.dp))
+            .background(p.surface)
+            .padding(horizontal = 18.dp, vertical = 16.dp)
+    ) {
+        Box(
+            Modifier.size(44.dp).background(warm.copy(alpha = 0.16f), CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(Icons.Rounded.SelfImprovement, null, tint = warm, modifier = Modifier.size(24.dp))
+        }
+        Spacer(Modifier.width(14.dp))
+        Column(Modifier.weight(1f)) {
+            Text("Zeit für dich", style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+            Text(
+                if (total == 0) "Noch alles vor dir" else de.abendlicht.app.formatMinutes(shown),
+                style = MaterialTheme.typography.headlineSmall.copy(fontFeatureSettings = "tnum"),
+                color = p.ink,
+            )
+        }
+        if (thisMonth > 0) {
+            Column(horizontalAlignment = Alignment.End) {
+                Text("diesen Monat", style = MaterialTheme.typography.bodySmall, color = p.inkSoft)
+                Text(de.abendlicht.app.formatMinutes(thisMonth), style = MaterialTheme.typography.titleMedium, color = p.ink)
+            }
+        }
+    }
+}

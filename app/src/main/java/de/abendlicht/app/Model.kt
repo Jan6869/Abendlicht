@@ -26,7 +26,7 @@ data class Habit(
 )
 
 /** Ein Eintrag im Kalender. Die Szene wird mitgespeichert, damit gelöschte Gewohnheiten ihre Farbe behalten. */
-data class LogEntry(val habitId: String, val scene: Scene)
+data class LogEntry(val habitId: String, val scene: Scene, val minutes: Int = -1)
 
 data class AppSettings(
     val reminderOn: Boolean = false,
@@ -45,6 +45,19 @@ data class TimerState(
     val running get() = endAt != null
     fun remaining(now: Long): Long = if (endAt != null) (endAt - now).coerceAtLeast(0) else pausedRemainingMs
 }
+
+fun formatMinutes(total: Int): String {
+    val h = total / 60
+    val m = total % 60
+    return when {
+        h == 0 -> "$m Min"
+        m == 0 -> "$h Std"
+        else -> "$h Std $m Min"
+    }
+}
+
+const val MIN_MINUTES = 5
+const val MAX_MINUTES = 90
 
 /** Ein neuer Abend beginnt um 4 Uhr morgens – so zählt auch das Lesen um halb eins noch zum Vorabend. */
 fun eveningDate(now: LocalDateTime = LocalDateTime.now()): LocalDate = now.minusHours(4).toLocalDate()
@@ -102,7 +115,7 @@ class Store(context: Context) {
                 val arr = o.getJSONArray(k)
                 out[LocalDate.parse(k)] = (0 until arr.length()).map { i ->
                     val parts = arr.getString(i).split(":")
-                    LogEntry(parts[0], sceneOf(parts.getOrNull(1)))
+                    LogEntry(parts[0], sceneOf(parts.getOrNull(1)), parts.getOrNull(2)?.toIntOrNull() ?: -1)
                 }
             }
             out
@@ -114,7 +127,7 @@ class Store(context: Context) {
         log.forEach { (date, entries) ->
             if (entries.isNotEmpty()) {
                 val arr = JSONArray()
-                entries.forEach { arr.put("${it.habitId}:${it.scene.name}") }
+                entries.forEach { arr.put("${it.habitId}:${it.scene.name}:${it.minutes}") }
                 o.put(date.toString(), arr)
             }
         }
