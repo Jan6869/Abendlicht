@@ -158,7 +158,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val habit = habits.firstOrNull { it.id == id } ?: return
         val total = habit.minutes * 60_000L
         val t = TimerState(id, total, System.currentTimeMillis() + total, total)
-        setTimer(t)
+        updateTimer(t)
         Alarms.scheduleTimer(getApplication(), t.endAt!!)
     }
 
@@ -166,24 +166,24 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         val t = timer ?: return
         val now = System.currentTimeMillis()
         if (t.running) {
-            setTimer(t.copy(endAt = null, pausedRemainingMs = t.remaining(now)))
+            updateTimer(t.copy(endAt = null, pausedRemainingMs = t.remaining(now)))
             Alarms.cancelTimer(getApplication())
         } else {
             val end = now + t.pausedRemainingMs
-            setTimer(t.copy(endAt = end))
+            updateTimer(t.copy(endAt = end))
             Alarms.scheduleTimer(getApplication(), end)
         }
     }
 
     fun cancelTimer() {
-        setTimer(null)
+        updateTimer(null)
         Alarms.cancelTimer(getApplication())
     }
 
     /** Timer abgelaufen oder vorzeitig „Fertig“ gedrückt. */
     fun finishTimer() {
         val t = timer ?: return
-        setTimer(null)
+        updateTimer(null)
         Alarms.cancelTimer(getApplication())
         markDone(t.habitId)
     }
@@ -194,7 +194,7 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         if (t.running && t.remaining(System.currentTimeMillis()) <= 0) finishTimer()
     }
 
-    private fun setTimer(t: TimerState?) {
+    private fun updateTimer(t: TimerState?) {
         timer = t
         store.saveTimer(t)
     }
